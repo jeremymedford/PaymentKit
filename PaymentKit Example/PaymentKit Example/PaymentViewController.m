@@ -35,7 +35,6 @@
     
     self.paymentView = [[PKView alloc] initWithFrame:CGRectMake(15, 25, 290, 45)];
     self.paymentView.delegate = self;
-    
     [self.view addSubview:self.paymentView];
 }
 

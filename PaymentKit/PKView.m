@@ -15,9 +15,15 @@
 
 #define kPKViewCardExpiryFieldStartX 84 + 200
 #define kPKViewCardCVCFieldStartX 177 + 200
+#define kPKViewAddressZipFieldStartX 260 + 200
 
 #define kPKViewCardExpiryFieldEndX 84
 #define kPKViewCardCVCFieldEndX 177
+#define kPKViewAddressZipFieldEndX 260
+
+#define kPKViewCardExpiryFieldFinalX 84 - 100
+#define kPKViewCardCVCFieldFinalX 177 - 100
+#define kPKViewAddressZipFieldFinalX 260 - 100
 
 static NSString *const kPKLocalizedStringsTableName = @"PaymentKit";
 static NSString *const kPKOldLocalizedStringsTableName = @"STPaymentLocalizable";
@@ -40,6 +46,7 @@ static NSString *const kPKOldLocalizedStringsTableName = @"STPaymentLocalizable"
 - (void)setupCardNumberField;
 - (void)setupCardExpiryField;
 - (void)setupCardCVCField;
+- (void)setupAddressZipField;
 
 - (void)pkTextFieldDidBackSpaceWhileTextIsEmpty:(PKTextField *)textField;
 
@@ -79,6 +86,8 @@ static NSString *const kPKOldLocalizedStringsTableName = @"STPaymentLocalizable"
     _isInitialState = YES;
     _isValidState = NO;
 
+    self.addressZipRequired = YES;
+    
     self.frame = CGRectMake(self.frame.origin.x, self.frame.origin.y, 290, 46);
     self.backgroundColor = [UIColor clearColor];
 
@@ -94,6 +103,10 @@ static NSString *const kPKOldLocalizedStringsTableName = @"STPaymentLocalizable"
     [self setupCardNumberField];
     [self setupCardExpiryField];
     [self setupCardCVCField];
+    
+    if (self.addressZipRequired) {
+        [self setupAddressZipField];
+    }
 
     [self.innerView addSubview:self.cardNumberField];
 
@@ -162,6 +175,19 @@ static NSString *const kPKOldLocalizedStringsTableName = @"STPaymentLocalizable"
     [self.cardCVCField.layer setMasksToBounds:YES];
 }
 
+- (void)setupAddressZipField
+{
+    self.addressZipField = [[PKTextField alloc] initWithFrame:CGRectMake(kPKViewAddressZipFieldStartX, 0, 60, 20)];
+    self.addressZipField.delegate = self;
+    self.addressZipField.placeholder = @"12345";
+    self.addressZipField.keyboardType = UIKeyboardTypeNumberPad;
+    self.addressZipField.textColor = DarkGreyColor;
+    self.addressZipField.font = DefaultBoldFont;
+    
+    [self.addressZipField.layer setMasksToBounds:YES];
+    
+}
+
 // Checks both the old and new localization table (we switched in 3/14 to PaymentKit.strings).
 // Leave this in for a long while to preserve compatibility.
 + (NSString *)localizedStringWithKey:(NSString *)key defaultValue:(NSString *)defaultValue
@@ -196,6 +222,11 @@ static NSString *const kPKOldLocalizedStringsTableName = @"STPaymentLocalizable"
     return [PKCardCVC cardCVCWithString:self.cardCVCField.text];
 }
 
+- (PKAddressZip *)addressZip
+{
+    return [PKAddressZip addressZipWithString:self.addressZipField.text];
+}
+
 #pragma mark - State
 
 - (void)stateCardNumber
@@ -213,6 +244,10 @@ static NSString *const kPKOldLocalizedStringsTableName = @"STPaymentLocalizable"
                               delay:0
                             options:(UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionAllowUserInteraction)
                          animations:^{
+                             self.addressZipField.frame = CGRectMake(kPKViewAddressZipFieldStartX,
+                                     self.addressZipField.frame.origin.y,
+                                     self.addressZipField.frame.size.width,
+                                     self.addressZipField.frame.size.height);
                              self.cardExpiryField.frame = CGRectMake(kPKViewCardExpiryFieldStartX,
                                      self.cardExpiryField.frame.origin.y,
                                      self.cardExpiryField.frame.size.width,
@@ -229,6 +264,7 @@ static NSString *const kPKOldLocalizedStringsTableName = @"STPaymentLocalizable"
                          completion:^(BOOL completed) {
                              [self.cardExpiryField removeFromSuperview];
                              [self.cardCVCField removeFromSuperview];
+                             [self.addressZipField removeFromSuperview];
                          }];
     }
 
@@ -267,6 +303,10 @@ static NSString *const kPKOldLocalizedStringsTableName = @"STPaymentLocalizable"
                      } completion:^(BOOL finished) {
     }];
     [UIView animateWithDuration:0.400 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
+        self.addressZipField.frame = CGRectMake(kPKViewAddressZipFieldEndX,
+                self.addressZipField.frame.origin.y,
+                self.addressZipField.frame.size.width,
+                self.addressZipField.frame.size.height);
         self.cardExpiryField.frame = CGRectMake(kPKViewCardExpiryFieldEndX,
                 self.cardExpiryField.frame.origin.y,
                 self.cardExpiryField.frame.size.width,
@@ -284,6 +324,7 @@ static NSString *const kPKOldLocalizedStringsTableName = @"STPaymentLocalizable"
     [self addSubview:self.placeholderView];
     [self.innerView addSubview:self.cardExpiryField];
     [self.innerView addSubview:self.cardCVCField];
+    [self.innerView addSubview:self.addressZipField];
     [self.cardExpiryField becomeFirstResponder];
 }
 
@@ -292,10 +333,68 @@ static NSString *const kPKOldLocalizedStringsTableName = @"STPaymentLocalizable"
     [self.cardCVCField becomeFirstResponder];
 }
 
+- (void)stateAddressZip
+{
+    
+    _isInitialState = NO;
+    
+    CGSize cardNumberSize;
+    CGSize lastGroupSize;
+    
+#if __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_7_0
+    if ([self.cardNumber.formattedString respondsToSelector:@selector(sizeWithAttributes:)]) {
+        NSDictionary *attributes = @{NSFontAttributeName: DefaultBoldFont};
+        
+        cardNumberSize = [self.cardNumber.formattedString sizeWithAttributes:attributes];
+        lastGroupSize = [self.cardNumber.lastGroup sizeWithAttributes:attributes];
+    } else {
+        cardNumberSize = [self.cardNumber.formattedString sizeWithFont:DefaultBoldFont];
+        lastGroupSize = [self.cardNumber.lastGroup sizeWithFont:DefaultBoldFont];
+    }
+#else
+    NSDictionary *attributes = @{NSFontAttributeName: DefaultBoldFont};
+    
+    cardNumberSize = [self.cardNumber.formattedString sizeWithAttributes:attributes];
+    lastGroupSize = [self.cardNumber.lastGroup sizeWithAttributes:attributes];
+#endif
+    
+//    CGFloat frameX = self.cardNumberField.frame.origin.x - (cardNumberSize.width - lastGroupSize.width);
+    CGFloat frameX = self.cardNumberField.frame.origin.x - 200;
+
+    [UIView animateWithDuration:0.05 delay:0.35 options:UIViewAnimationOptionCurveEaseInOut
+                     animations:^{
+                         self.opaqueOverGradientView.alpha = 1.0;
+                     } completion:^(BOOL finished) {
+                     }];
+    [UIView animateWithDuration:0.400 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
+        self.addressZipField.frame = CGRectMake(kPKViewAddressZipFieldFinalX,
+                                                self.addressZipField.frame.origin.y,
+                                                self.addressZipField.frame.size.width,
+                                                self.addressZipField.frame.size.height);
+        self.cardExpiryField.frame = CGRectMake(kPKViewCardExpiryFieldFinalX,
+                                                self.cardExpiryField.frame.origin.y,
+                                                self.cardExpiryField.frame.size.width,
+                                                self.cardExpiryField.frame.size.height);
+        self.cardCVCField.frame = CGRectMake(kPKViewCardCVCFieldFinalX,
+                                             self.cardCVCField.frame.origin.y,
+                                             self.cardCVCField.frame.size.width,
+                                             self.cardCVCField.frame.size.height);
+        self.cardNumberField.frame = CGRectMake(frameX,
+                                                self.cardNumberField.frame.origin.y,
+                                                self.cardNumberField.frame.size.width,
+                                                self.cardNumberField.frame.size.height);
+    }                completion:nil];
+    
+    [self addSubview:self.placeholderView];
+    [self.addressZipField becomeFirstResponder];
+}
+
 - (BOOL)isValid
 {
-    return [self.cardNumber isValid] && [self.cardExpiry isValid] &&
-            [self.cardCVC isValidWithType:self.cardNumber.cardType];
+    return [self.cardNumber isValid] &&
+    [self.cardExpiry isValid] &&
+    (self.addressZipRequired ? [self.addressZip isValid] : YES) &&
+    [self.cardCVC isValidWithType:self.cardNumber.cardType];
 }
 
 - (PKCard *)card
@@ -305,6 +404,9 @@ static NSString *const kPKOldLocalizedStringsTableName = @"STPaymentLocalizable"
     card.cvc = [self.cardCVC string];
     card.expMonth = [self.cardExpiry month];
     card.expYear = [self.cardExpiry year];
+    if (self.addressZipRequired) {
+        card.addressZip = [self.addressZip string];
+    }
 
     return card;
 }
@@ -410,13 +512,19 @@ static NSString *const kPKOldLocalizedStringsTableName = @"STPaymentLocalizable"
     if ([textField isEqual:self.cardCVCField]) {
         return [self cardCVCShouldChangeCharactersInRange:range replacementString:replacementString];
     }
+    
+    if ([textField isEqual:self.addressZipField]) {
+        return [self addressZipShouldChangeCharactersInRange:range replacementString:replacementString];
+    }
 
     return YES;
 }
 
 - (void)pkTextFieldDidBackSpaceWhileTextIsEmpty:(PKTextField *)textField
 {
-    if (textField == self.cardCVCField)
+    if ([textField isEqual:self.addressZipField]) {
+        [self.cardCVCField becomeFirstResponder];
+    } else if (textField == self.cardCVCField)
         [self.cardExpiryField becomeFirstResponder];
     else if (textField == self.cardExpiryField)
         [self stateCardNumber];
@@ -498,10 +606,34 @@ static NSString *const kPKOldLocalizedStringsTableName = @"STPaymentLocalizable"
 
     if ([cardCVC isValidWithType:cardType]) {
         [self textFieldIsValid:self.cardCVCField];
+        if (self.addressZipRequired) [self stateAddressZip];
     } else {
         [self textFieldIsInvalid:self.cardCVCField withErrors:NO];
     }
 
+    return NO;
+}
+
+- (BOOL)addressZipShouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)replacementString
+{
+    NSString *resultString = [self.addressZipField.text stringByReplacingCharactersInRange:range withString:replacementString];
+    resultString = [PKTextField textByRemovingUselessSpacesFromString:resultString];
+    PKAddressZip *addressZip = [PKAddressZip addressZipWithString:resultString];
+    
+    // Restrict length
+    if (![addressZip isPartiallyValid]) {
+        return NO;
+    }
+    
+    // Strip non-digits
+    self.addressZipField.text = [addressZip string];
+    
+    if ([addressZip isValid]) {
+        [self textFieldIsValid:self.addressZipField];
+    } else {
+        [self textFieldIsInvalid:self.addressZipField withErrors:NO];
+    }
+    
     return NO;
 }
 
@@ -547,7 +679,13 @@ static NSString *const kPKOldLocalizedStringsTableName = @"STPaymentLocalizable"
 #pragma mark UIResponder
 - (UIResponder *)firstResponderField;
 {
-    NSArray *responders = @[self.cardNumberField, self.cardExpiryField, self.cardCVCField];
+    NSMutableArray *mResponders = [@[self.cardNumberField, self.cardExpiryField, self.cardCVCField] mutableCopy];
+    
+    if (self.addressZipRequired) {
+        [mResponders addObject:self.addressZipField];
+    }
+    NSArray *responders = [NSArray arrayWithArray:mResponders];
+    
     for (UIResponder *responder in responders) {
         if (responder.isFirstResponder) {
             return responder;
@@ -565,6 +703,8 @@ static NSString *const kPKOldLocalizedStringsTableName = @"STPaymentLocalizable"
         return self.cardExpiryField;
     else if (![[PKCardCVC cardCVCWithString:self.cardCVCField.text] isValid])
         return self.cardCVCField;
+    else if (self.addressZipRequired && ![[PKAddressZip addressZipWithString:self.addressZipField.text] isValid])
+        return self.addressZipField;
 
     return nil;
 }

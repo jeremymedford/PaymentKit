@@ -36,8 +36,10 @@
 @property IBOutlet PKTextField *cardNumberField;
 @property IBOutlet PKTextField *cardExpiryField;
 @property IBOutlet PKTextField *cardCVCField;
+@property IBOutlet PKTextField *addressZipField;
 @property IBOutlet UIImageView *placeholderView;
 @property (nonatomic, weak) id <PKViewDelegate> delegate;
 @property (readonly) PKCard *card;
 
+@property (nonatomic) BOOL addressZipRequired;
 @end
